@@ -1,0 +1,347 @@
+name: Set up AI warehouse
+
+on:
+  workflow_dispatch:   # adds a "Run workflow" button in the Actions tab
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create folders and starter files
+        run: |
+          # ---------- Folders ----------
+          mkdir -p warehouse/jobs/_job-template/{plans,photos,notes,takeoffs,contracts,change-orders}
+          mkdir -p warehouse/templates warehouse/pricing warehouse/prompts warehouse/knowledge
+
+          # ---------- Top-level README ----------
+          cat > warehouse/README.md << 'EOF'
+          # Project Warehouse
+
+          Everything the AI needs to help with jobs, in one place.
+
+          - jobs/        one folder per job (copy _job-template to start a new one)
+          - templates/   scope of work, change orders, quotes
+          - pricing/     current material and labor prices
+          - prompts/     saved instructions for takeoffs, scopes, etc.
+          - knowledge/   rules of thumb, common takeoff mistakes, how you price labor
+          EOF
+
+          # ---------- Instructions for Claude ----------
+          cat > warehouse/CLAUDE.md << 'EOF'
+          # About this warehouse
+
+          I am a carpenter. This repo holds my job files, templates, and pricing.
+
+          ## Rules
+          - Always show where every quantity in a takeoff came from (sheet, room, dimension).
+          - Always add a waste factor and list it separately.
+          - After every takeoff, list items commonly forgotten (fasteners, blocking, trim, adhesive).
+          - Never finalize a quote without a written scope of work.
+          - Any extra work requested by the customer needs a signed change order before it starts.
+          - If a dimension or detail is unclear, ask me. Do not guess.
+          - Currency is CAD. Use pricing/material-prices.csv for costs.
+          EOF
+
+          # ---------- Scope of work template ----------
+          cat > warehouse/templates/scope-of-work.md << 'EOF'
+          # Scope of Work
+
+          **Customer:**
+          **Job address:**
+          **Date:**
+
+          ## Work included
+          -
+
+          ## Work NOT included (exclusions)
+          -
+
+          ## Materials
+          - Supplied by:
+
+          ## Price and payment
+          - Total price:
+          - Deposit:
+          - Payment schedule:
+
+          ## Timeline
+          - Start:
+          - Estimated completion:
+
+          ## Changes
+          Any work outside this scope requires a written, signed change order
+          before work begins. Extra work is billed at the agreed rate.
+
+          ## Signatures
+          Customer: ____________________  Date: ________
+          Contractor: __________________  Date: ________
+          EOF
+
+          # ---------- Change order template ----------
+          cat > warehouse/templates/change-order.md << 'EOF'
+          # Change Order #
+
+          **Job:**
+          **Date:**
+          **Requested by:**
+
+          ## Description of change
+
+          ## Added/removed materials and labor
+          -
+
+          ## Price change:
+          ## Schedule impact:
+
+          Approved by customer: ____________________  Date: ________
+          EOF
+
+          # ---------- Pricing starter ----------
+          cat > warehouse/pricing/material-prices.csv << 'EOF'
+          item,unit,price,supplier,date_updated
+          2x4x8 SPF stud,each,0.00,,
+          1/2 in drywall 4x8,sheet,0.00,,
+          3 in framing nails,box,0.00,,
+          EOF
+
+          # ---------- Takeoff checklist prompt ----------
+          cat > warehouse/prompts/takeoff-checklist.md << 'EOF'
+          # Takeoff prompt
+
+          Build a material takeoff from the plans and notes provided.
+
+          1. List every item with quantity, unit, and the source of the quantity.
+          2. Add waste (default 10% lumber, 12% sheet goods unless I say otherwise).
+          3. Flag anything unclear or missing from the plans.
+          4. Then check: what is commonly missing from a takeoff like this?
+          5. Price using pricing/material-prices.csv and show a total.
+          EOF
+
+          # ---------- Knowledge starter ----------
+          cat > warehouse/knowledge/rules-of-thumb.md << 'EOF'
+          # Rules of thumb
+
+          Starting defaults. Edit anything that doesn't match how you work.
+          The AI uses these unless a job says otherwise.
+
+          ## Waste factors
+          - Framing lumber: 10%
+          - Sheet goods (plywood, OSB): 10%, up to 15% with lots of cuts
+          - Drywall: 10-12%
+          - Trim and baseboard: 10-15% (more with many corners)
+          - Flooring: 10%, 15% if laid diagonal
+          - Decking: 10%, 15% if diagonal
+          - Siding: 10-15%
+
+          ## Framing counts
+          - Stud spacing is 16 in on center unless the plans say 24 in
+          - Straight wall studs = wall length in feet x 0.75, plus 1
+          - Add extra studs for each corner (2-3) and each opening (jack and king studs)
+          - Headers, cripples, and sills are counted separately from studs
+          - Plates: one bottom plate and a double top plate, so 3 x wall length
+          - Pressure-treated bottom plate anywhere it touches concrete
+          - Ask about blocking before walls close: cabinets, handrails, TVs, grab bars
+
+          ## Sheet goods
+          - A 4x8 sheet is 32 sq ft
+          - Drywall sheets = (wall sq ft + ceiling sq ft) / 32, rounded up, plus waste
+          - Only subtract openings larger than one sheet (32 sq ft)
+
+          ## Small items that always get forgotten
+          - Fasteners (nails, screws, construction adhesive)
+          - Joint compound, tape, corner bead
+          - Shims, flashing, sill gasket
+          - Blades, bits, dumpster or disposal fees
+          - Delivery charges, fuel, parking
+
+          ## Before sending any quote
+          - Is there a written scope with exclusions?
+          - Did the takeoff use the latest plan revision?
+          - Is waste included and shown separately?
+          - Are prices from the current price sheet (check the date)?
+          - Is labor priced from labor-pricing.md, not from memory?
+          - Is there a deposit and a payment schedule?
+          - Does it say changes need a signed change order?
+          EOF
+
+          cat > warehouse/knowledge/common-takeoff-mistakes.md << 'EOF'
+          # Common takeoff mistakes and how to catch them
+
+          | Mistake | How to catch it |
+          |---|---|
+          | Misread dimension | Cross-check against the overall dimension string on the plan |
+          | Missed room or wall | Count rooms on the plan, then count rooms in the takeoff |
+          | Old plan revision | Check revision date and cloud marks on every sheet |
+          | No waste added | Waste must appear as its own line |
+          | Forgot hardware and fasteners | Run the "small items" list in rules-of-thumb.md |
+          | Customer-supplied items unclear | Write who supplies each material in the scope |
+          | Wrong unit (pieces vs lineal feet vs sq ft) | Every line must show its unit |
+          | Missed demo, disposal, or prep work | Ask what has to come out before anything goes in |
+          | Verbal add-ons never priced | Anything agreed in conversation goes on a change order |
+          EOF
+
+          cat > warehouse/knowledge/labor-pricing.md << 'EOF'
+          # How I price labor
+
+          Fill in the numbers. The AI will not guess them.
+
+          ## My hourly cost
+          - Wage I want to take home per hour: $
+          - Overhead per hour (truck, tools, insurance, WCB, phone, accounting): $
+          - Total cost per hour: $
+
+          ## Markup
+          - Profit margin on labor: %
+          - Billable rate per hour (cost per hour plus margin): $
+
+          ## Production rates (hours per unit, from my own jobs)
+          - Framing walls, per lineal foot: 
+          - Hanging drywall, per sheet: 
+          - Interior door install, each: 
+          - Baseboard, per lineal foot: 
+          - Deck framing, per sq ft: 
+
+          ## Rules
+          - Add travel time and trips to the supplier
+          - Add a contingency (10% or more) when plans are incomplete or it is a renovation
+          - Minimum job charge: $
+          - Never quote labor from memory. Use the rates above.
+          EOF
+
+          cat > warehouse/templates/quote.md << 'EOF'
+          # Quote
+
+          **Customer:**
+          **Job address:**
+          **Date:**
+          **Quote valid for:** 30 days
+
+          ## Summary of work
+          (Short description. Full details are in the attached Scope of Work.)
+
+          ## Price breakdown
+          | Item | Amount |
+          |---|---|
+          | Materials | $ |
+          | Labor | $ |
+          | Contingency | $ |
+          | Tax | $ |
+          | **Total** | **$** |
+
+          ## Terms
+          - Deposit due before work starts: $
+          - Balance due: 
+          - This quote is not a contract until the Scope of Work is signed.
+          EOF
+
+          cat > warehouse/templates/site-walk-checklist.md << 'EOF'
+          # Site walk checklist
+
+          - Measure and photograph every room or area involved
+          - Existing conditions: damage, rot, out-of-square, uneven floors
+          - What has to be demolished or removed first
+          - Access: stairs, doors, parking, power, water
+          - Who supplies which materials
+          - Permits needed and who pulls them
+          - Other trades involved and who goes first
+          - Customer's timeline and any deadlines
+          - Anything the customer said they "might also want"
+          EOF
+
+          cat > warehouse/templates/daily-log.md << 'EOF'
+          # Daily Log
+
+          **Job:**
+          **Date:**
+          **Weather:**
+          **Crew on site:**
+
+          ## Work completed today
+
+          ## Materials delivered or used
+
+          ## Problems or delays
+
+          ## Conversations and agreements (who said what)
+
+          ## Extra work requested (needs a change order?)
+
+          ## Plan for tomorrow
+          EOF
+
+          cat > warehouse/templates/punch-list.md << 'EOF'
+          # Punch List
+
+          **Job:**
+          **Date of walkthrough:**
+
+          | # | Location | Item | Responsible | Done |
+          |---|---|---|---|---|
+          | 1 |  |  |  |  |
+          EOF
+
+          cat > warehouse/jobs/_job-template/job-info.md << 'EOF'
+          # Job info
+
+          - Customer:
+          - Phone / email:
+          - Address:
+          - Job type:
+          - Date quoted:
+          - Quote amount:
+          - Contract signed (date):
+          - Deposit received:
+          - Plan revision in use:
+          - Notes:
+          EOF
+
+          cat > warehouse/prompts/scope-from-walkthrough.md << 'EOF'
+          # Scope from a site walk
+
+          Turn my notes or voice transcript into a Scope of Work using
+          templates/scope-of-work.md.
+
+          1. Write the work included in plain language.
+          2. Write a clear list of exclusions. If something was discussed but not
+             agreed, put it in exclusions and flag it for me.
+          3. Leave price fields blank unless I gave numbers.
+          4. List every question you need answered before this can be signed.
+          5. Do not invent dimensions, materials, or prices.
+          EOF
+
+          cat > warehouse/prompts/change-order.md << 'EOF'
+          # Change order from a request
+
+          I will describe extra work the customer asked for. Using
+          templates/change-order.md:
+
+          1. Describe the change in plain language.
+          2. List added materials and labor, priced from the warehouse files.
+          3. State the schedule impact.
+          4. Flag anything that overlaps with the original scope.
+          5. Remind me the work does not start until it is signed.
+          EOF
+
+          cat > warehouse/prompts/daily-log.md << 'EOF'
+          # Daily log from notes
+
+          I will give you voice notes, photos, or rough text from today.
+          Fill in templates/daily-log.md. Keep my wording for conversations and
+          agreements. If something sounds like extra work, flag it for a change order.
+          EOF
+
+          # ---------- Keep empty folders in git ----------
+          find warehouse -type d -empty -exec touch {}/.gitkeep \;
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add warehouse
+          git diff --cached --quiet && echo "Nothing new to commit" || git commit -m "Set up AI warehouse structure"
+          git push
